@@ -1,5 +1,3 @@
-
-import React from 'react';
 import { CalendarEvent } from './types';
 
 export const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];

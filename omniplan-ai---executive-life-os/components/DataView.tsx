@@ -2,6 +2,7 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { Download, Upload, Database, ShieldCheck, FileJson, Calendar as CalendarIcon, FileUp, CheckCircle, AlertCircle } from 'lucide-react';
 import { clearAllData } from '../utils/dataManager';
+import { AISettings } from './AISettings';
 
 interface DataViewProps {
   handleSaveData: () => void;
@@ -61,7 +62,12 @@ export const DataView: React.FC<DataViewProps> = ({
                 </div>
                 <span className="text-sm font-black text-blue-600 uppercase tracking-[0.3em]">Infrastructure</span>
             </div>
-            <h2 className="text-6xl font-black text-slate-900 tracking-tighter mb-16 leading-tight">Persistence & Data</h2>
+            <h2 className="text-6xl font-black text-slate-900 tracking-tighter mb-16 leading-tight">Settings & Data</h2>
+
+            {/* AI Provider Settings */}
+            <div className="mb-12">
+                <AISettings />
+            </div>
 
             <div className="grid md:grid-cols-2 gap-10 mb-10">
                 <div

@@ -10,7 +10,7 @@ import {
   calculateHabitStreak, getActiveHabitsForWeek, deleteHabitFromWeek 
 } from '../utils/weekManager';
 import { CheckableList } from './CheckableList';
-import { predictMainEvent } from '../services/geminiService';
+import { predictMainEvent } from '../services/ai';
 
 interface WeeklyPlannerProps {
   currentDate: Date;
