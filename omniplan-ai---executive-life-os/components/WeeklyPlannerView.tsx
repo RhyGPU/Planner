@@ -1,0 +1,424 @@
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { ChevronLeft, ChevronRight, X, Plus, Zap, Check, Trash2, Activity, Layout, List, Flame } from 'lucide-react';
+import { WeekData, Habit } from '../types';
+import { 
+  getWeekDays, formatDateKey, DAYS, MONTHS, 
+  START_HOUR, PIXELS_PER_HOUR, formatHour, generateTimeSlots 
+} from '../constants';
+import { 
+  calculateHabitStreak, getActiveHabitsForWeek, deleteHabitFromWeek 
+} from '../utils/weekManager';
+import { CheckableList } from './CheckableList';
+import { predictMainEvent } from '../services/geminiService';
+
+interface WeeklyPlannerProps {
+  currentDate: Date;
+  setCurrentDate: (date: Date) => void;
+  currentWeek: WeekData;
+  updateCurrentWeek: (week: WeekData) => void;
+  setAiLoading: (loading: boolean) => void;
+}
+
+export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
+  currentDate, setCurrentDate, currentWeek, updateCurrentWeek, setAiLoading
+}) => {
+  const weekDates = useMemo(() => getWeekDays(currentDate), [currentDate]);
+  const [eventEditor, setEventEditor] = useState<any>(null);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [activeDayIdx, setActiveDayIdx] = useState(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
+  const [mobileTab, setMobileTab] = useState<'plan' | 'strategy'>('plan');
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isMobile = windowWidth < 1024;
+  const activeHabits = getActiveHabitsForWeek(currentWeek.habits, currentWeek.weekStartDate).filter(h => !h.archived);
+
+  // Auto-archive stale habits
+  useEffect(() => {
+    const now = Date.now();
+    const staleLimit = 14 * 24 * 60 * 60 * 1000; // 14 days
+    const staleHabit = currentWeek.habits.find(h => !h.archived && h.lastUsedAt && (now - h.lastUsedAt > staleLimit));
+    
+    if (staleHabit) {
+      // Logic for stale habits - archive if needed
+      const updatedHabits = currentWeek.habits.map(h => 
+        h.id === staleHabit.id ? { ...h, archived: true } : h
+      );
+      updateCurrentWeek({ ...currentWeek, habits: updatedHabits });
+    }
+  }, [currentWeek, updateCurrentWeek]);
+
+  const jumpWeeks = (n: number) => {
+    const d = new Date(currentDate);
+    d.setDate(d.getDate() + (n * 7));
+    setCurrentDate(d);
+  };
+
+  const handleOptimizeFullWeek = async () => {
+    setAiLoading(true);
+    const updatedDailyPlans = { ...currentWeek.dailyPlans };
+    const pastNotes = Object.values(currentWeek.dailyPlans)
+      .map(p => p.notes)
+      .filter(n => n.length > 0)
+      .slice(-15);
+
+    for (const date of weekDates) {
+      const dateKey = formatDateKey(date);
+      const dayPlan = updatedDailyPlans[dateKey];
+      if (!dayPlan.focus || dayPlan.focus.trim() === "") {
+        const currentDayTodos = dayPlan.todos.map(t => t.text);
+        const prediction = await predictMainEvent(pastNotes, currentDayTodos);
+        updatedDailyPlans[dateKey] = { ...dayPlan, focus: prediction };
+      }
+    }
+    
+    updateCurrentWeek({ ...currentWeek, dailyPlans: updatedDailyPlans });
+    setAiLoading(false);
+  };
+
+  const toggleHabit = (habitId: string, dateKey: string) => {
+    const updatedHabits = currentWeek.habits.map(h => {
+      if (h.id === habitId) {
+        return {
+          ...h,
+          lastUsedAt: Date.now(),
+          completions: { ...h.completions, [dateKey]: !h.completions[dateKey] }
+        };
+      }
+      return h;
+    });
+    updateCurrentWeek({ ...currentWeek, habits: updatedHabits });
+  };
+
+  const addNewHabit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const name = prompt("Enter habit to track weekly:");
+    if (name && name.trim()) {
+      const newHabit: Habit = { 
+        id: `h-${Date.now()}`, 
+        name: name.trim(), 
+        completions: {}, 
+        createdAt: Date.now(),
+        lastUsedAt: Date.now(),
+        archived: false
+      };
+      updateCurrentWeek({ ...currentWeek, habits: [...currentWeek.habits, newHabit] });
+    }
+  };
+
+  const removeHabit = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (window.confirm("Delete this habit?")) {
+      const habit = currentWeek.habits.find(h => h.id === id);
+      if (habit) {
+        const deletedHabit = deleteHabitFromWeek(habit, currentWeek.weekStartDate);
+        const updatedHabits = currentWeek.habits.map(h => h.id === id ? deletedHabit : h);
+        updateCurrentWeek({ ...currentWeek, habits: updatedHabits });
+      }
+    }
+  };
+
+  const saveEvent = () => {
+    if (!eventEditor) return;
+    const { dateKey, id, title, startHour, duration, isNew, repeating } = eventEditor;
+    const updatedDailyPlans = { ...currentWeek.dailyPlans };
+    const dayPlan = updatedDailyPlans[dateKey];
+    const existingEvent = !isNew ? dayPlan.events.find(e => e.id === id) : undefined;
+    const baseEvent = { 
+      id: isNew ? Date.now() : id, 
+      title: title || "New Session", 
+      startHour: parseFloat(startHour), 
+      duration: parseFloat(duration), 
+      color: existingEvent?.color ?? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm",
+      repeating: typeof repeating === 'boolean' ? repeating : (existingEvent?.repeating ?? false)
+    };
+    
+    if (isNew) {
+      dayPlan.events.push(baseEvent);
+    } else {
+      dayPlan.events = dayPlan.events.map(e => e.id === id ? baseEvent : e);
+    }
+    
+    updateCurrentWeek({ ...currentWeek, dailyPlans: updatedDailyPlans });
+    setEventEditor(null);
+  };
+
+  const renderedDates = isMobile ? [weekDates[activeDayIdx]] : weekDates;
+
+  return (
+    <div className="flex flex-col h-full bg-white relative w-full overflow-hidden">
+      {/* Event Editor Modal */}
+      {eventEditor && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-sm border border-slate-200">
+            <div className="flex justify-between items-center mb-5">
+               <h3 className="text-xl font-black text-slate-900">{eventEditor.isNew ? 'New Block' : 'Edit Block'}</h3>
+               <button onClick={() => setEventEditor(null)} className="text-slate-400 hover:text-slate-600 p-1"><X size={24}/></button>
+            </div>
+            <div className="space-y-5">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Description</label>
+                <input autoFocus className="w-full border border-slate-200 rounded-xl p-3.5 text-sm font-bold bg-slate-50" value={eventEditor.title} onChange={e => setEventEditor({...eventEditor, title: e.target.value})} placeholder="Title..." />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Start</label>
+                    <select className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-slate-50 font-bold" value={eventEditor.startHour} onChange={e => setEventEditor({...eventEditor, startHour: e.target.value})}>
+                        {generateTimeSlots().map(h => <option key={h} value={h}>{formatHour(h)}</option>)}
+                    </select>
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Duration</label>
+                    <input type="number" step="0.5" className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-slate-50 font-bold" value={eventEditor.duration} onChange={e => setEventEditor({...eventEditor, duration: e.target.value})} />
+                 </div>
+              </div>
+              <label className="flex items-center gap-2 text-xs font-black text-slate-600 uppercase tracking-widest">
+                <input
+                  type="checkbox"
+                  checked={!!eventEditor.repeating}
+                  onChange={e => setEventEditor({ ...eventEditor, repeating: e.target.checked })}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                Repeat Weekly
+              </label>
+              <div className="flex gap-3 pt-3">
+                 {!eventEditor.isNew && <button onClick={() => { 
+                   const updatedDailyPlans = { ...currentWeek.dailyPlans };
+                   updatedDailyPlans[eventEditor.dateKey].events = updatedDailyPlans[eventEditor.dateKey].events.filter(e => e.id !== eventEditor.id);
+                   updateCurrentWeek({ ...currentWeek, dailyPlans: updatedDailyPlans });
+                   setEventEditor(null); 
+                 }} className="flex-1 bg-red-50 text-red-600 font-black py-3.5 rounded-2xl text-xs uppercase tracking-widest">Delete</button>}
+                 <button onClick={saveEvent} className="flex-1 bg-blue-600 text-white font-black py-3.5 rounded-2xl text-xs uppercase tracking-widest shadow-xl">Confirm</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header / Week Navigation */}
+      <div className="flex-shrink-0 border-b border-slate-200 flex flex-wrap min-h-[140px] bg-slate-50/40 w-full">
+        <div className="w-full lg:w-56 border-b lg:border-b-0 lg:border-r border-slate-200 p-4 lg:p-6 flex flex-row lg:flex-col justify-between items-center lg:items-start shrink-0">
+          <div>
+            <span className="text-[10px] text-blue-500 font-black uppercase tracking-widest block mb-1">Horizon</span>
+            <div className="text-xl lg:text-3xl font-black text-slate-900 leading-none truncate">{MONTHS[currentDate.getMonth()].toUpperCase()}</div>
+            <div className="text-xs font-bold text-slate-400 mt-1.5">Week of {weekDates[0].getDate()}</div>
+          </div>
+          <div className="flex items-center gap-2">
+             <button onClick={() => jumpWeeks(-1)} className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-slate-600 hover:bg-slate-50"><ChevronLeft size={20}/></button>
+             <button onClick={() => jumpWeeks(1)} className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-slate-600 hover:bg-slate-50"><ChevronRight size={20}/></button>
+          </div>
+        </div>
+        
+        <div className="flex-1 border-r border-slate-200 p-4 lg:p-6 flex flex-col min-w-[200px]">
+            <div className="text-[10px] font-black uppercase text-blue-600 tracking-[0.2em] mb-3">Business Goals</div>
+            <CheckableList 
+              items={currentWeek.goals.business.map((text, i) => ({ id: i, text, done: false }))} 
+              onChange={items => updateCurrentWeek({...currentWeek, goals: {...currentWeek.goals, business: items.map(i => i.text)}})} 
+              onAdd={() => updateCurrentWeek({...currentWeek, goals: {...currentWeek.goals, business: [...currentWeek.goals.business, '']}}) } 
+              placeholder="Strategic aim..." 
+            />
+        </div>
+        <div className="flex-1 p-4 lg:p-6 flex flex-col min-w-[200px]">
+            <div className="text-[10px] font-black uppercase text-emerald-600 tracking-[0.2em] mb-3">Well-being & Growth</div>
+            <CheckableList 
+              items={currentWeek.goals.personal.map((text, i) => ({ id: i, text, done: false }))} 
+              onChange={items => updateCurrentWeek({...currentWeek, goals: {...currentWeek.goals, personal: items.map(i => i.text)}})} 
+              onAdd={() => updateCurrentWeek({...currentWeek, goals: {...currentWeek.goals, personal: [...currentWeek.goals.personal, '']}}) } 
+              placeholder="Personal win..." 
+            />
+        </div>
+      </div>
+      
+      {/* Mobile Tabs */}
+      {isMobile && (
+        <div className="flex border-b border-slate-200 bg-white">
+            <button onClick={() => setMobileTab('plan')} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 ${mobileTab === 'plan' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-slate-400'}`}><Layout size={14}/> Daily Planner</button>
+            <button onClick={() => setMobileTab('strategy')} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 ${mobileTab === 'strategy' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-slate-400'}`}><List size={14}/> Habits & Syncs</button>
+        </div>
+      )}
+
+      <div className="flex-1 flex flex-col lg:flex-row w-full overflow-hidden">
+        {/* Strategy Sidebar (Habits) */}
+        {(!isMobile || mobileTab === 'strategy') && (
+            <div className={`w-full lg:w-56 shrink-0 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50/20 overflow-y-auto custom-scrollbar ${isMobile ? 'flex-1' : ''}`}>
+                <div className="p-4 lg:p-5 border-b border-slate-200 bg-indigo-50/50">
+                    <button onClick={handleOptimizeFullWeek} className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl shadow-lg transition-all active:scale-95 group">
+                        <Zap size={16} className="group-hover:animate-pulse fill-white"/>
+                        <span className="text-xs font-black uppercase tracking-tight">AI Optimize Week</span>
+                    </button>
+                </div>
+
+                <div className="flex flex-col border-b border-slate-200 p-5 bg-white/60">
+                    <div className="flex items-center justify-between mb-5">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Activity size={12} className="text-blue-500"/> Habitual Protocols</span>
+                        <button onClick={addNewHabit} className="text-blue-600 hover:bg-blue-600 hover:text-white p-2 rounded-lg transition-all shadow-sm bg-white border border-blue-100"><Plus size={14}/></button>
+                    </div>
+                    <div className="space-y-6">
+                        {activeHabits.length === 0 && <div className="text-[10px] italic text-slate-400 text-center py-6 bg-slate-100/50 rounded-2xl border-2 border-dashed border-slate-200">Define protocols...</div>}
+                        {activeHabits
+                          .sort((a, b) => a.createdAt - b.createdAt) // Sort by creation date
+                          .map(habit => {
+                          const streak = calculateHabitStreak(habit, weekDates);
+                          return (
+                            <div key={habit.id} className="flex flex-col gap-2.5 group/habit">
+                              <div className="flex justify-between items-center px-0.5">
+                                <div className="flex items-center gap-2 flex-1">
+                                  <span className="text-[11px] font-black text-slate-800 tracking-tight truncate">{habit.name}</span>
+                                  <span title={`Current: ${streak.current} • Longest: ${streak.longest} • Days: ${streak.totalDays} • ${streak.percentageComplete}%`} className="text-[11px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full flex items-center gap-2">
+                                    <Flame size={12} className="text-amber-500"/>
+                                    <span className="text-[10px]">{streak.current}</span>
+                                  </span>
+                                </div>
+                                <button onClick={(e) => removeHabit(habit.id, e)} className={`${isMobile ? 'opacity-100' : 'opacity-0 group-hover/habit:opacity-100'} text-slate-300 hover:text-red-500 transition-all p-1`}>
+                                  <Trash2 size={12}/>
+                                </button>
+                              </div>
+                              <div className="flex justify-between items-center bg-white rounded-xl p-2 border border-slate-100 shadow-sm ring-1 ring-slate-200/50">
+                                {weekDates.map((date, idx) => {
+                                  const dateKey = formatDateKey(date);
+                                  const isDone = !!habit.completions[dateKey];
+                                  return (
+                                    <button 
+                                      key={idx}
+                                      onClick={() => toggleHabit(habit.id, dateKey)}
+                                      className={`w-5 h-5 flex items-center justify-center text-[8px] font-black transition-all rounded-full border-2 ${
+                                        isDone ? 'bg-blue-600 border-blue-600 text-white shadow-inner' : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500'
+                                      }`}
+                                    >
+                                      {isDone ? <Check size={8} strokeWidth={5}/> : DAYS[idx][0]}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                </div>
+
+                <div className="flex-1 flex flex-col p-5 overflow-y-auto">
+                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Meetings & Syncs</div>
+                    <CheckableList 
+                      items={currentWeek.meetings} 
+                      onChange={meetings => updateCurrentWeek({...currentWeek, meetings})} 
+                      onAdd={() => updateCurrentWeek({...currentWeek, meetings: [...currentWeek.meetings, {id: `m-${Date.now()}`, text: '', done: false}]})} 
+                      placeholder="Meeting..." 
+                    />
+                </div>
+            </div>
+        )}
+
+        {/* Main Planner Grid */}
+        {(!isMobile || mobileTab === 'plan') && (
+            <div className="flex-1 h-full overflow-y-auto min-w-0 bg-slate-50 relative custom-scrollbar">
+                {!isMobile && (
+                    <div className="flex w-full border-b border-slate-200 bg-white sticky top-0 z-50 shadow-sm">
+                        {weekDates.map((date, idx) => {
+                        const isToday = new Date().toDateString() === date.toDateString();
+                        return (
+                            <div key={idx} className="flex-1 min-w-0 flex flex-col border-r border-slate-200 last:border-r-0">
+                                <div className={`h-16 px-4 py-3 flex items-center justify-between border-b border-slate-100 ${isToday ? 'bg-blue-600 text-white' : 'bg-white'}`}>
+                                    <div>
+                                        <div className={`text-[9px] font-black uppercase tracking-widest ${isToday ? 'text-blue-100' : 'text-slate-400'}`}>{DAYS[idx]}</div>
+                                        <div className={`text-xl font-black ${isToday ? 'text-white' : 'text-slate-900'}`}>{date.getDate()}</div>
+                                    </div>
+                                    {isToday && <div className="w-2 h-2 rounded-full bg-white animate-ping"></div>}
+                                </div>
+                            </div>
+                        )
+                        })}
+                    </div>
+                )}
+
+                <div className="flex w-full border-b border-slate-200 bg-white">
+                    {renderedDates.map((date, idx) => {
+                        const dateKey = formatDateKey(date);
+                        const dayPlan = currentWeek.dailyPlans[dateKey];
+                        return (
+                            <div key={idx} className="flex-1 min-w-[250px] lg:min-w-0 border-r border-slate-200 last:border-r-0 flex flex-col">
+                                <div className="p-6 bg-gradient-to-br from-blue-50/20 via-white to-white border-b border-slate-100 min-h-[160px]">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div>
+                                        <div className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em]">Daily Focus</div>
+                                    </div>
+                                    <textarea 
+                                        className="w-full min-h-[100px] bg-transparent border-none text-[18px] font-black text-slate-900 leading-[1.3] resize-none p-0 focus:ring-0 placeholder:text-slate-200 placeholder:font-black italic" 
+                                        placeholder="The absolute priority..." 
+                                        value={dayPlan.focus || ""} 
+                                        onChange={(e) => {
+                                          const updatedPlans = { ...currentWeek.dailyPlans };
+                                          updatedPlans[dateKey] = { ...dayPlan, focus: e.target.value };
+                                          updateCurrentWeek({ ...currentWeek, dailyPlans: updatedPlans });
+                                        }}
+                                    />
+                                </div>
+                                <div className="p-6 bg-white min-h-[300px]">
+                                    <div className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-6 flex items-center gap-3">To Do List<div className="flex-1 h-px bg-slate-50"></div></div>
+                                    <CheckableList 
+                                      items={dayPlan.todos} 
+                                      onChange={(newTodos) => {
+                                        const updatedPlans = { ...currentWeek.dailyPlans };
+                                        updatedPlans[dateKey] = { ...dayPlan, todos: newTodos };
+                                        updateCurrentWeek({ ...currentWeek, dailyPlans: updatedPlans });
+                                      }} 
+                                      onAdd={() => {
+                                        const updatedPlans = { ...currentWeek.dailyPlans };
+                                        updatedPlans[dateKey] = { ...dayPlan, todos: [...dayPlan.todos, {id: `t-${Date.now()}`, text: '', done: false}] };
+                                        updateCurrentWeek({ ...currentWeek, dailyPlans: updatedPlans });
+                                      }} 
+                                      placeholder="Next action..." 
+                                    />
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+                
+                <div className="flex w-full bg-slate-50 relative">
+                    {renderedDates.map((date, idx) => {
+                        const dateKey = formatDateKey(date);
+                        const dayPlan = currentWeek.dailyPlans[dateKey];
+                        
+                        return (
+                            <div key={idx} className="flex-1 min-w-[250px] lg:min-w-0 border-r border-slate-200 last:border-r-0 relative bg-white/40" style={{ height: `${24 * PIXELS_PER_HOUR}px` }}>
+                                {generateTimeSlots().map((hour) => (
+                                    <div 
+                                        key={hour} 
+                                        className="h-20 border-b border-slate-100/40 flex items-start px-3 py-1.5 relative group cursor-pointer hover:bg-blue-50/50" 
+                                        onClick={() => setEventEditor({ dateKey, startHour: hour, duration: 1, title: "", isNew: true, repeating: false })}
+                                    >
+                                        <span className="text-[9px] font-black text-slate-200 group-hover:text-blue-500 pointer-events-none">{formatHour(hour)}</span>
+                                    </div>
+                                ))}
+                                {dayPlan.events.map(evt => {
+                                    const top = (evt.startHour - START_HOUR) * PIXELS_PER_HOUR; 
+                                    const height = evt.duration * PIXELS_PER_HOUR;
+                                    return (
+                                        <div 
+                                            key={`${evt.id}-${dateKey}`} 
+                                            onClick={(e) => { e.stopPropagation(); setEventEditor({ dateKey, id: evt.id, title: evt.title, startHour: evt.startHour, duration: evt.duration, isNew: false, repeating: evt.repeating ?? false }); }} 
+                                            style={{ top: `${top}px`, height: `${height - 1}px` }} 
+                                            className={`absolute left-0 right-0 mx-1 rounded-2xl border-l-4 shadow-xl shadow-slate-200/50 p-3.5 text-[11px] leading-tight cursor-pointer hover:brightness-95 z-10 overflow-hidden transition-all hover:scale-[1.03] active:scale-95 ${evt.color}`}
+                                        >
+                                            <div className="font-black truncate uppercase tracking-tight text-slate-900">{evt.title}</div>
+                                            <div className="opacity-70 font-bold text-[9px] mt-1 uppercase tracking-wider">{formatHour(evt.startHour)} - {formatHour(evt.startHour + evt.duration)}</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+        )}
+      </div>
+    </div>
+  );
+};

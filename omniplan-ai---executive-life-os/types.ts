@@ -1,0 +1,83 @@
+
+export interface Todo {
+  id: string | number;
+  text: string;
+  done: boolean;
+}
+
+export interface Habit {
+  id: string;
+  name: string;
+  completions: Record<string, boolean>; // key is dateKey
+  createdAt: number; // timestamp when habit was created
+  deletedAt?: number; // timestamp when habit was deleted (null means active)
+  lastUsedAt?: number; // timestamp of last completion
+  archived?: boolean;
+}
+
+export interface HabitStreak {
+  current: number; // Current streak count
+  longest: number; // Longest streak ever
+  totalDays: number; // Total days completed
+  percentageComplete: number; // Completion percentage
+}
+
+export interface CalendarEvent {
+  id: string | number;
+  title: string;
+  description?: string;
+  startHour: number;
+  duration: number;
+  color: string;
+  repeating?: boolean; // Whether this event repeats to future weeks
+}
+
+export interface LifeGoals {
+  '10': Record<string, string>;
+  '5': Record<string, { goal: string; action: string }>;
+  '3': Record<string, string>;
+  '1': Record<string, string>;
+}
+
+export interface Email {
+  id: number;
+  provider: string;
+  sender: string;
+  subject: string;
+  preview: string;
+  body: string;
+  time: string;
+  read: boolean;
+}
+
+export interface DailyPlan {
+  focus?: string; // Daily focus theme
+  todos: Todo[];
+  notes: string;
+  events: CalendarEvent[];
+}
+
+export interface WeeklyGoals {
+  business: string[]; // Enterprise/business weekly goals
+  personal: string[]; // Personal well-being & growth goals
+}
+
+export interface WeekData {
+  weekStartDate: string; // ISO format: YYYY-MM-DD (Monday of the week)
+  weekEndDate: string; // ISO format: YYYY-MM-DD (Sunday of the week)
+  goals: WeeklyGoals;
+  dailyPlans: Record<string, DailyPlan>; // key is dateKey (YYYY-MM-DD)
+  meetings: Todo[]; // Weekly meetings across all days
+  notes: string; // Weekly overview/summary notes
+  habits: Habit[]; // Week-specific habit tracking
+  createdAt: number;
+  updatedAt: number;
+}
+
+export enum Tab {
+  Inbox = 'email',
+  Monthly = 'monthly',
+  Weekly = 'weekly',
+  Goals = 'goals',
+  Data = 'data'
+}

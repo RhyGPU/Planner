@@ -1,0 +1,7 @@
+{
+  "name": "OmniPlan AI - Executive Life OS",
+  "description": "A high-performance productivity suite combining an AI-powered weekly planner, monthly calendar, life visioning board, and secure data management.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
