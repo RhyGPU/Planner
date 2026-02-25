@@ -50,7 +50,7 @@ export const DataView: React.FC<DataViewProps> = ({
         setDragOver(false);
     }, []);
 
-    const isElectron = typeof window !== 'undefined' && typeof (window as any).require === 'function';
+    const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
 
     return (
       <div className="flex flex-col h-full bg-white p-12 overflow-y-auto custom-scrollbar">
@@ -152,12 +152,7 @@ export const DataView: React.FC<DataViewProps> = ({
                     {isElectron && (
                         <button
                             onClick={() => {
-                                try {
-                                    const { ipcRenderer } = (window as any).require('electron');
-                                    ipcRenderer.send('quit-app');
-                                } catch {
-                                    // Not in Electron context
-                                }
+                                (window as any).electronAPI?.quitApp();
                             }}
                             className="bg-slate-700 hover:bg-slate-600 text-white px-8 py-5 rounded-2xl font-black text-xs tracking-widest uppercase transition-all shadow-xl shadow-slate-900/50 active:scale-95 whitespace-nowrap flex items-center gap-2"
                         >
