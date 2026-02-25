@@ -68,11 +68,12 @@ export default function App() {
     try {
       const data = await uploadBackup(file);
       setAllWeeks(data.allWeeks);
-      setEmails(data.emails);
+      setEmails(data.emails.length > 0 ? data.emails : emails);
       setLifeGoals(data.lifeGoals);
-      alert("Executive configuration restored successfully.");
     } catch (err) {
-      alert("Restoration failed: " + (err instanceof Error ? err.message : "Unknown error"));
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Restore failed:", message);
+      alert("Restore failed: " + message);
     }
   };
 

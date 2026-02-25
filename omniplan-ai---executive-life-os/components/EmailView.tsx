@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Mail, ChevronLeft, Search, Archive, Trash2, CheckCircle } from 'lucide-react';
+import { Mail, ChevronLeft, Archive, Trash2, CheckCircle } from 'lucide-react';
 import { Email } from '../types';
 
 interface EmailViewProps {
@@ -26,11 +26,7 @@ export const EmailView: React.FC<EmailViewProps> = ({ emails, setEmails }) => {
     <div className="flex h-full bg-white relative">
       <div className={`${selectedId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-80 lg:w-96 border-r border-slate-200`}>
         <div className="p-6 border-b border-slate-200">
-           <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-4">Inbox</h2>
-           <div className="relative">
-              <Search className="absolute left-3 top-3 text-slate-400" size={16}/>
-              <input className="w-full bg-slate-100 border-none rounded-xl py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500" placeholder="Search correspondence..." />
-           </div>
+           <h2 className="text-2xl font-black text-slate-900 tracking-tight">Inbox</h2>
         </div>
         <div className="flex-1 overflow-y-auto">
             {emails.length === 0 ? (
