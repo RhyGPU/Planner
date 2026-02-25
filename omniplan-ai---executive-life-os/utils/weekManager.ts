@@ -141,19 +141,6 @@ export const saveAllWeeks = (weeks: Record<string, WeekData>) => {
 };
 
 /**
- * Update a specific week
- */
-export const updateWeek = (weekKey: string, weekData: WeekData) => {
-  const allWeeks = getAllWeeks();
-  allWeeks[weekKey] = {
-    ...weekData,
-    updatedAt: Date.now(),
-  };
-  saveAllWeeks(allWeeks);
-  return allWeeks;
-};
-
-/**
  * Get weeks for a date range (e.g., to populate monthly view)
  */
 export const getWeeksInRange = (
@@ -174,30 +161,6 @@ export const getWeeksInRange = (
   }
   
   return weeks;
-};
-
-/**
- * Get combined daily plans for all days of a week for aggregated monthly view
- */
-export const getWeekSummary = (weekData: WeekData) => {
-  return {
-    weekStart: weekData.weekStartDate,
-    weekEnd: weekData.weekEndDate,
-    businessGoals: weekData.goals.business,
-    personalGoals: weekData.goals.personal,
-    totalTodos: Object.values(weekData.dailyPlans).reduce(
-      (sum, day) => sum + day.todos.length,
-      0
-    ),
-    totalEvents: Object.values(weekData.dailyPlans).reduce(
-      (sum, day) => sum + day.events.length,
-      0
-    ),
-    completedTodos: Object.values(weekData.dailyPlans).reduce(
-      (sum, day) => sum + day.todos.filter(t => t.done).length,
-      0
-    ),
-  };
 };
 
 /**

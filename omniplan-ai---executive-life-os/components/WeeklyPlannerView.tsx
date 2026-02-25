@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, X, Plus, Zap, Check, Trash2, Activity, Layout, List, Flame } from 'lucide-react';
 import { WeekData, DailyPlan, Habit } from '../types';
 import { 
@@ -60,7 +60,7 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
     setCurrentDate(d);
   };
 
-  const handleOptimizeFullWeek = async () => {
+  const handleOptimizeFullWeek = useCallback(async () => {
     setAiLoading(true);
     const updatedDailyPlans = { ...currentWeek.dailyPlans };
     const pastNotes = (Object.values(currentWeek.dailyPlans) as DailyPlan[])
@@ -77,12 +77,12 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
         updatedDailyPlans[dateKey] = { ...dayPlan, focus: prediction };
       }
     }
-    
+
     updateCurrentWeek({ ...currentWeek, dailyPlans: updatedDailyPlans });
     setAiLoading(false);
-  };
+  }, [currentDate, currentWeek, updateCurrentWeek, weekDates]);
 
-  const toggleHabit = (habitId: string, dateKey: string) => {
+  const toggleHabit = useCallback((habitId: string, dateKey: string) => {
     const updatedHabits = currentWeek.habits.map(h => {
       if (h.id === habitId) {
         return {
@@ -94,7 +94,7 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
       return h;
     });
     updateCurrentWeek({ ...currentWeek, habits: updatedHabits });
-  };
+  }, [currentWeek, updateCurrentWeek]);
 
   const addNewHabit = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -113,7 +113,7 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
     }
   };
 
-  const removeHabit = (id: string, e: React.MouseEvent) => {
+  const removeHabit = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     if (window.confirm("Delete this habit?")) {
@@ -124,32 +124,32 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
         updateCurrentWeek({ ...currentWeek, habits: updatedHabits });
       }
     }
-  };
+  }, [currentWeek, updateCurrentWeek]);
 
-  const saveEvent = () => {
+  const saveEvent = useCallback(() => {
     if (!eventEditor) return;
     const { dateKey, id, title, startHour, duration, isNew, repeating } = eventEditor;
     const updatedDailyPlans = { ...currentWeek.dailyPlans };
     const dayPlan = updatedDailyPlans[dateKey];
     const existingEvent = !isNew ? dayPlan.events.find(e => e.id === id) : undefined;
-    const baseEvent = { 
-      id: isNew ? Date.now() : id, 
-      title: title || "New Session", 
-      startHour: parseFloat(startHour), 
-      duration: parseFloat(duration), 
+    const baseEvent = {
+      id: isNew ? Date.now() : id,
+      title: title || "New Session",
+      startHour: parseFloat(startHour),
+      duration: parseFloat(duration),
       color: existingEvent?.color ?? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm",
       repeating: typeof repeating === 'boolean' ? repeating : (existingEvent?.repeating ?? false)
     };
-    
+
     if (isNew) {
       dayPlan.events.push(baseEvent);
     } else {
       dayPlan.events = dayPlan.events.map(e => e.id === id ? baseEvent : e);
     }
-    
+
     updateCurrentWeek({ ...currentWeek, dailyPlans: updatedDailyPlans });
     setEventEditor(null);
-  };
+  }, [eventEditor, currentWeek, updateCurrentWeek]);
 
   const renderedDates = isMobile ? [weekDates[activeDayIdx]] : weekDates;
 
