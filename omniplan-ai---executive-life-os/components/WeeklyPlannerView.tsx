@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, X, Plus, Zap, Check, Trash2, Activity, Layout, List, Flame } from 'lucide-react';
-import { WeekData, Habit } from '../types';
+import { WeekData, DailyPlan, Habit } from '../types';
 import { 
   getWeekDays, formatDateKey, DAYS, MONTHS, 
   START_HOUR, PIXELS_PER_HOUR, formatHour, generateTimeSlots 
@@ -38,20 +38,21 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
   const isMobile = windowWidth < 1024;
   const activeHabits = getActiveHabitsForWeek(currentWeek.habits, currentWeek.weekStartDate).filter(h => !h.archived);
 
-  // Auto-archive stale habits
+  // Auto-archive stale habits (only runs once when week changes)
   useEffect(() => {
     const now = Date.now();
     const staleLimit = 14 * 24 * 60 * 60 * 1000; // 14 days
-    const staleHabit = currentWeek.habits.find(h => !h.archived && h.lastUsedAt && (now - h.lastUsedAt > staleLimit));
-    
-    if (staleHabit) {
-      // Logic for stale habits - archive if needed
-      const updatedHabits = currentWeek.habits.map(h => 
-        h.id === staleHabit.id ? { ...h, archived: true } : h
+    const staleHabits = currentWeek.habits.filter(h => !h.archived && h.lastUsedAt && (now - h.lastUsedAt > staleLimit));
+
+    if (staleHabits.length > 0) {
+      const staleIds = new Set(staleHabits.map(h => h.id));
+      const updatedHabits = currentWeek.habits.map(h =>
+        staleIds.has(h.id) ? { ...h, archived: true } : h
       );
       updateCurrentWeek({ ...currentWeek, habits: updatedHabits });
     }
-  }, [currentWeek, updateCurrentWeek]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWeek.weekStartDate]);
 
   const jumpWeeks = (n: number) => {
     const d = new Date(currentDate);
@@ -62,7 +63,7 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
   const handleOptimizeFullWeek = async () => {
     setAiLoading(true);
     const updatedDailyPlans = { ...currentWeek.dailyPlans };
-    const pastNotes = Object.values(currentWeek.dailyPlans)
+    const pastNotes = (Object.values(currentWeek.dailyPlans) as DailyPlan[])
       .map(p => p.notes)
       .filter(n => n.length > 0)
       .slice(-15);

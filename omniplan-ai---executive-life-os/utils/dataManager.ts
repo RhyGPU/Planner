@@ -100,22 +100,40 @@ export const clearAllData = () => {
 };
 
 /**
- * Upload and import backup from file
+ * Upload and parse backup from file.
+ * Returns the normalized data — caller is responsible for updating app state.
+ * App state update will trigger the useEffect that persists to localStorage.
  */
 export const uploadBackup = (file: File): Promise<OmniPlanBackupData> => {
   return new Promise((resolve, reject) => {
+    if (!file.name.endsWith('.json')) {
+      reject(new Error('Please select a .json backup file'));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const raw = JSON.parse(e.target?.result as string);
+        const text = e.target?.result;
+        if (typeof text !== 'string' || text.trim().length === 0) {
+          reject(new Error('The file is empty'));
+          return;
+        }
+        const raw = JSON.parse(text);
         const normalized = normalizeBackup(raw);
+        // Persist to localStorage so the data is available immediately
         importAllData(normalized);
         resolve(normalized);
       } catch (error) {
-        reject(new Error('Invalid backup file'));
+        if (error instanceof SyntaxError) {
+          reject(new Error('The file is not valid JSON. Please select an OmniPlan backup file.'));
+        } else if (error instanceof Error) {
+          reject(error);
+        } else {
+          reject(new Error('Failed to process backup file'));
+        }
       }
     };
-    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.onerror = () => reject(new Error('Failed to read file. Please try again.'));
     reader.readAsText(file);
   });
 };

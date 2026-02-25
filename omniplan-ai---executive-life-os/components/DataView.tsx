@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { Download, Upload, Database, ShieldCheck, FileJson, Calendar as CalendarIcon, FileUp, LogOut } from 'lucide-react';
+import React, { useRef, useState, useCallback } from 'react';
+import { Download, Upload, Database, ShieldCheck, FileJson, Calendar as CalendarIcon, FileUp, CheckCircle, AlertCircle } from 'lucide-react';
 import { clearAllData } from '../utils/dataManager';
 
 interface DataViewProps {
@@ -8,10 +8,50 @@ interface DataViewProps {
   handleLoadData: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-export const DataView: React.FC<DataViewProps> = ({ 
-    handleSaveData, 
-    handleLoadData, 
+export const DataView: React.FC<DataViewProps> = ({
+    handleSaveData,
+    handleLoadData,
 }) => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [dragOver, setDragOver] = useState(false);
+    const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        handleLoadData(e);
+        setUploadStatus('success');
+        setTimeout(() => setUploadStatus('idle'), 3000);
+        // Reset the file input so the same file can be re-uploaded
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.endsWith('.json')) {
+            // Create a synthetic event-like object for the handler
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            if (fileInputRef.current) {
+                fileInputRef.current.files = dataTransfer.files;
+                fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }
+    }, []);
+
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOver(true);
+    }, []);
+
+    const handleDragLeave = useCallback(() => {
+        setDragOver(false);
+    }, []);
+
+    const isElectron = typeof window !== 'undefined' && typeof (window as any).require === 'function';
+
     return (
       <div className="flex flex-col h-full bg-white p-12 overflow-y-auto custom-scrollbar">
         <div className="max-w-4xl mx-auto w-full">
@@ -22,9 +62,9 @@ export const DataView: React.FC<DataViewProps> = ({
                 <span className="text-sm font-black text-blue-600 uppercase tracking-[0.3em]">Infrastructure</span>
             </div>
             <h2 className="text-6xl font-black text-slate-900 tracking-tighter mb-16 leading-tight">Persistence & Data</h2>
-            
+
             <div className="grid md:grid-cols-2 gap-10 mb-10">
-                <div 
+                <div
                     onClick={handleSaveData}
                     className="group bg-slate-50 border-2 border-slate-50 p-10 rounded-[2.5rem] cursor-pointer hover:border-blue-600 hover:bg-white hover:shadow-2xl transition-all duration-500"
                 >
@@ -35,22 +75,47 @@ export const DataView: React.FC<DataViewProps> = ({
                     <p className="text-slate-500 font-bold leading-relaxed text-sm">Download a high-fidelity JSON archive of all habits, events, emails, and life goals.</p>
                 </div>
 
-                <div className="group bg-slate-50 border-2 border-slate-50 p-10 rounded-[2.5rem] relative hover:border-emerald-600 hover:bg-white hover:shadow-2xl transition-all duration-500">
-                    <input 
-                        type="file" 
-                        onChange={handleLoadData} 
-                        accept=".json" 
-                        className="absolute inset-0 opacity-0 cursor-pointer z-10" 
+                <div
+                    className={`group bg-slate-50 border-2 p-10 rounded-[2.5rem] relative transition-all duration-500 ${
+                        dragOver
+                            ? 'border-emerald-500 bg-emerald-50 shadow-2xl scale-[1.02]'
+                            : uploadStatus === 'success'
+                            ? 'border-emerald-500 bg-emerald-50/50'
+                            : 'border-slate-50 hover:border-emerald-600 hover:bg-white hover:shadow-2xl'
+                    }`}
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                >
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        onChange={handleFileChange}
+                        accept=".json"
+                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
                     />
-                    <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 mb-8 group-hover:scale-110 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-xl shadow-emerald-100/50">
-                        <Upload size={32}/>
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-all shadow-xl ${
+                        uploadStatus === 'success'
+                            ? 'bg-emerald-600 text-white shadow-emerald-100/50'
+                            : 'bg-emerald-100 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white shadow-emerald-100/50'
+                    }`}>
+                        {uploadStatus === 'success' ? <CheckCircle size={32}/> : <Upload size={32}/>}
                     </div>
-                    <h3 className="font-black text-2xl text-slate-900 mb-3 tracking-tight">Restore Local State</h3>
-                    <p className="text-slate-500 font-bold leading-relaxed text-sm">Upload an archive file to instantly override current workspace with past data points.</p>
+                    <h3 className="font-black text-2xl text-slate-900 mb-3 tracking-tight">
+                        {uploadStatus === 'success' ? 'Restored!' : 'Restore Local State'}
+                    </h3>
+                    <p className="text-slate-500 font-bold leading-relaxed text-sm">
+                        {dragOver
+                            ? 'Drop your backup file here...'
+                            : uploadStatus === 'success'
+                            ? 'Your workspace has been restored from the backup file.'
+                            : 'Click or drag a .json backup file to restore your workspace.'
+                        }
+                    </p>
                 </div>
             </div>
             <div className="grid md:grid-cols-1 gap-10 mb-20">
-                <div 
+                <div
                     className="group bg-slate-50 border-2 border-slate-50 p-12 rounded-[2.5rem] cursor-not-allowed opacity-60 flex items-center gap-10"
                 >
                     <div className="w-20 h-20 bg-indigo-100 rounded-3xl flex items-center justify-center text-indigo-600 shadow-xl shadow-indigo-100/50 flex-shrink-0">
@@ -73,7 +138,7 @@ export const DataView: React.FC<DataViewProps> = ({
                     <p className="text-slate-400 font-bold leading-relaxed">OmniPlan operates on a 100% client-side logic. Your high-performance dashboard, habits, and secrets never touch our infrastructure.</p>
                 </div>
                 <div className="flex gap-4">
-                    <button 
+                    <button
                         onClick={() => {
                             if (window.confirm("CRITICAL WARNING: This will permanently purge your local Life OS data. This action is irreversible. Continue?")) {
                                 clearAllData();
@@ -84,19 +149,24 @@ export const DataView: React.FC<DataViewProps> = ({
                     >
                         Nuke Workspace
                     </button>
-                    <button 
-                        onClick={() => {
-                            const { ipcRenderer } = window.require('electron');
-                            ipcRenderer.send('quit-app');
-                        }}
-                        className="bg-slate-700 hover:bg-slate-600 text-white px-8 py-5 rounded-2xl font-black text-xs tracking-widest uppercase transition-all shadow-xl shadow-slate-900/50 active:scale-95 whitespace-nowrap flex items-center gap-2"
-                    >
-                        <LogOut size={16}/>
-                        Exit Program
-                    </button>
+                    {isElectron && (
+                        <button
+                            onClick={() => {
+                                try {
+                                    const { ipcRenderer } = (window as any).require('electron');
+                                    ipcRenderer.send('quit-app');
+                                } catch {
+                                    // Not in Electron context
+                                }
+                            }}
+                            className="bg-slate-700 hover:bg-slate-600 text-white px-8 py-5 rounded-2xl font-black text-xs tracking-widest uppercase transition-all shadow-xl shadow-slate-900/50 active:scale-95 whitespace-nowrap flex items-center gap-2"
+                        >
+                            Exit Program
+                        </button>
+                    )}
                 </div>
             </div>
-            
+
             <div className="mt-20 pt-16 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-10">
                 <div className="flex flex-col items-center text-center p-8 bg-slate-50 rounded-[2.5rem]">
                     <FileJson className="text-slate-300 mb-5" size={40}/>

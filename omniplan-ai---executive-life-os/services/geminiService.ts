@@ -1,9 +1,23 @@
 
 import { GoogleGenAI } from "@google/genai";
 
+const getApiKey = (): string => {
+  // Vite injects these at build time via define in vite.config.ts
+  const key = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY)
+    || (typeof process !== 'undefined' && process.env?.API_KEY)
+    || '';
+  return key;
+};
+
 export const callGeminiSchedule = async (todoText: string): Promise<any[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-  
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.warn("Gemini API key not configured. Set GEMINI_API_KEY in your environment.");
+    return [];
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
   const prompt = `
     I have the following to-do list for today: "${todoText}".
     Please create a realistic schedule starting around 9 AM.
@@ -12,14 +26,14 @@ export const callGeminiSchedule = async (todoText: string): Promise<any[]> => {
     - title: string
     - start: number (decimal hour, e.g., 9 or 13.5)
     - duration: number (decimal hour, e.g., 1 or 0.5)
-    
+
     Example output format:
     [{"title": "Morning Coffee & Plan", "start": 9, "duration": 0.5}, {"title": "Work Block", "start": 9.5, "duration": 2}]
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.0-flash',
       contents: [{ parts: [{ text: prompt }] }],
       config: {
           temperature: 0.7,
@@ -27,9 +41,9 @@ export const callGeminiSchedule = async (todoText: string): Promise<any[]> => {
     });
 
     const text = response.text || "";
-    let jsonMatch = text.match(/\[[\s\S]*\]/);
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
     const cleanText = jsonMatch ? jsonMatch[0] : text.replace(/```json/g, '').replace(/```/g, '').trim();
-    
+
     return JSON.parse(cleanText);
   } catch (error) {
     console.error("Gemini API Error:", error);
@@ -38,21 +52,27 @@ export const callGeminiSchedule = async (todoText: string): Promise<any[]> => {
 };
 
 export const predictMainEvent = async (history: string[], currentTodos: string[]): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-  
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.warn("Gemini API key not configured. Set GEMINI_API_KEY in your environment.");
+    return "Set GEMINI_API_KEY to enable AI";
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
   const prompt = `
     You are an executive performance coach. Based on the user's past focus areas and current tasks, predict the single most high-impact "Main Event" or theme for today.
-    
+
     Past Themes: ${history.join(", ")}
     Current Tasks: ${currentTodos.join(", ")}
-    
+
     Return ONLY the suggested Main Event title (max 60 characters). No explanation or quotes.
     Example: "Deep Work: Architecture Scalability Review" or "Strategic Networking: Investor Luncheon"
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.0-flash',
       contents: [{ parts: [{ text: prompt }] }],
       config: { temperature: 0.8 }
     });
