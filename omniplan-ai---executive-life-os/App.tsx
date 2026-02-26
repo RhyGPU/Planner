@@ -58,6 +58,23 @@ export default function App() {
     }));
   }, [currentDate]);
 
+  // Update week data for a specific date (used by MonthlyView)
+  const updateWeekForDate = useCallback((date: Date, updatedWeek: WeekData) => {
+    const weekKey = getWeekStorageKey(date);
+    setAllWeeks(prev => ({
+      ...prev,
+      [weekKey]: {
+        ...updatedWeek,
+        updatedAt: Date.now(),
+      }
+    }));
+  }, []);
+
+  const navigateToWeeklyView = useCallback((date: Date) => {
+    setCurrentDate(date);
+    setActiveTab(Tab.Weekly);
+  }, []);
+
   const handleSaveData = useCallback(() => {
     downloadBackup();
   }, []);
@@ -90,10 +107,12 @@ export default function App() {
         <div className="flex-1 bg-white rounded-3xl shadow-2xl shadow-slate-200/40 border border-slate-200 relative overflow-auto">
           {activeTab === Tab.Inbox && <EmailView emails={emails} setEmails={setEmails} />}
           {activeTab === Tab.Monthly && (
-            <MonthlyView 
-              currentDate={currentDate} 
-              setCurrentDate={setCurrentDate} 
+            <MonthlyView
+              currentDate={currentDate}
+              setCurrentDate={setCurrentDate}
               allWeeks={allWeeks}
+              onUpdateWeek={updateWeekForDate}
+              onNavigateToWeek={navigateToWeeklyView}
             />
           )}
           {activeTab === Tab.Weekly && (

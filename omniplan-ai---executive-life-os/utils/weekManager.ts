@@ -153,13 +153,19 @@ export const getWeeksInRange = (
   
   while (current <= endDate) {
     const week = getOrCreateWeek(current, allWeeks);
-    // Avoid duplicates
     if (!weeks.find(w => w.weekStartDate === week.weekStartDate)) {
       weeks.push(week);
     }
     current.setDate(current.getDate() + 7);
   }
-  
+
+  // Always include the week containing the last day of the range
+  // (the 7-day jump can skip the final partial week)
+  const lastWeek = getOrCreateWeek(endDate, allWeeks);
+  if (!weeks.find(w => w.weekStartDate === lastWeek.weekStartDate)) {
+    weeks.push(lastWeek);
+  }
+
   return weeks;
 };
 

@@ -103,9 +103,10 @@ export const CheckableList: React.FC<CheckableListProps> = ({
                 onKeyDown={(e) => handleKeyDown(e, index)}
                 placeholder={placeholder}
                 disabled={false}
-                className={`w-full min-w-0 bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-sm font-medium leading-relaxed resize-none block break-words overflow-wrap ${
+                className={`w-full min-w-0 bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-sm font-medium leading-relaxed resize-none block ${
                   item.done ? 'line-through text-slate-400' : colorClass
                 }`}
+                style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
             />
           </div>
 

@@ -28,6 +28,8 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [activeDayIdx, setActiveDayIdx] = useState(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
   const [mobileTab, setMobileTab] = useState<'plan' | 'strategy'>('plan');
+  const [newHabitName, setNewHabitName] = useState('');
+  const [isAddingHabit, setIsAddingHabit] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -99,18 +101,24 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
   const addNewHabit = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    const name = prompt("Enter habit to track weekly:");
-    if (name && name.trim()) {
-      const newHabit: Habit = { 
-        id: `h-${Date.now()}`, 
-        name: name.trim(), 
-        completions: {}, 
+    setIsAddingHabit(true);
+    setNewHabitName('');
+  };
+
+  const confirmAddHabit = () => {
+    if (newHabitName.trim()) {
+      const newHabit: Habit = {
+        id: `h-${Date.now()}`,
+        name: newHabitName.trim(),
+        completions: {},
         createdAt: Date.now(),
         lastUsedAt: Date.now(),
         archived: false
       };
       updateCurrentWeek({ ...currentWeek, habits: [...currentWeek.habits, newHabit] });
     }
+    setIsAddingHabit(false);
+    setNewHabitName('');
   };
 
   const removeHabit = useCallback((id: string, e: React.MouseEvent) => {
@@ -262,7 +270,24 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
                         <button onClick={addNewHabit} className="text-blue-600 hover:bg-blue-600 hover:text-white p-2 rounded-lg transition-all shadow-sm bg-white border border-blue-100"><Plus size={14}/></button>
                     </div>
                     <div className="space-y-6">
-                        {activeHabits.length === 0 && <div className="text-[10px] italic text-slate-400 text-center py-6 bg-slate-100/50 rounded-2xl border-2 border-dashed border-slate-200">Define protocols...</div>}
+                        {isAddingHabit && (
+                          <div className="flex items-center gap-2 bg-blue-50/50 rounded-xl p-2 border border-blue-100">
+                            <input
+                              autoFocus
+                              className="flex-1 min-w-0 bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-blue-200"
+                              placeholder="e.g. Meditate, Exercise..."
+                              value={newHabitName}
+                              onChange={e => setNewHabitName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') confirmAddHabit();
+                                if (e.key === 'Escape') { setIsAddingHabit(false); setNewHabitName(''); }
+                              }}
+                            />
+                            <button onClick={confirmAddHabit} className="bg-blue-600 text-white p-1.5 rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"><Check size={12}/></button>
+                            <button onClick={() => { setIsAddingHabit(false); setNewHabitName(''); }} className="text-slate-400 hover:text-slate-600 p-1.5 flex-shrink-0"><X size={12}/></button>
+                          </div>
+                        )}
+                        {activeHabits.length === 0 && !isAddingHabit && <div className="text-[10px] italic text-slate-400 text-center py-6 bg-slate-100/50 rounded-2xl border-2 border-dashed border-slate-200 cursor-pointer hover:bg-blue-50/50 hover:border-blue-200 hover:text-blue-400 transition-all" onClick={addNewHabit}>Click + to add a habit...</div>}
                         {activeHabits
                           .sort((a, b) => a.createdAt - b.createdAt) // Sort by creation date
                           .map(habit => {
@@ -318,13 +343,13 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
 
         {/* Main Planner Grid */}
         {(!isMobile || mobileTab === 'plan') && (
-            <div className="flex-1 h-full overflow-y-auto min-w-0 bg-slate-50 relative custom-scrollbar">
+            <div className="flex-1 h-full overflow-auto min-w-0 bg-slate-50 relative custom-scrollbar">
                 {!isMobile && (
                     <div className="flex w-full border-b border-slate-200 bg-white sticky top-0 z-50 shadow-sm">
                         {weekDates.map((date, idx) => {
                         const isToday = new Date().toDateString() === date.toDateString();
                         return (
-                            <div key={idx} className="flex-1 min-w-0 flex flex-col border-r border-slate-200 last:border-r-0">
+                            <div key={idx} className="flex-1 min-w-[160px] flex flex-col border-r border-slate-200 last:border-r-0">
                                 <div className={`h-16 px-4 py-3 flex items-center justify-between border-b border-slate-100 ${isToday ? 'bg-blue-600 text-white' : 'bg-white'}`}>
                                     <div>
                                         <div className={`text-[9px] font-black uppercase tracking-widest ${isToday ? 'text-blue-100' : 'text-slate-400'}`}>{DAYS[idx]}</div>
@@ -343,7 +368,7 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
                         const dateKey = formatDateKey(date);
                         const dayPlan = currentWeek.dailyPlans[dateKey];
                         return (
-                            <div key={idx} className="flex-1 min-w-[250px] lg:min-w-0 border-r border-slate-200 last:border-r-0 flex flex-col">
+                            <div key={idx} className="flex-1 min-w-[160px] border-r border-slate-200 last:border-r-0 flex flex-col">
                                 <div className="p-6 bg-gradient-to-br from-blue-50/20 via-white to-white border-b border-slate-100 min-h-[160px]">
                                     <div className="flex items-center gap-2 mb-4">
                                         <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div>
@@ -388,7 +413,7 @@ export const WeeklyPlannerView: React.FC<WeeklyPlannerProps> = ({
                         const dayPlan = currentWeek.dailyPlans[dateKey];
                         
                         return (
-                            <div key={idx} className="flex-1 min-w-[250px] lg:min-w-0 border-r border-slate-200 last:border-r-0 relative bg-white/40" style={{ height: `${24 * PIXELS_PER_HOUR}px` }}>
+                            <div key={idx} className="flex-1 min-w-[160px] border-r border-slate-200 last:border-r-0 relative bg-white/40" style={{ height: `${24 * PIXELS_PER_HOUR}px` }}>
                                 {generateTimeSlots().map((hour) => (
                                     <div 
                                         key={hour} 
