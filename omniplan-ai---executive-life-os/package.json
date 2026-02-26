@@ -4,6 +4,7 @@
   "private": true,
   "version": "2.1.0",
   "description": "Executive Life OS - Planner, Calendar, Goals & AI",
+  "author": "OmniPlan",
   "type": "module",
   "main": "electron-main.cjs",
   "scripts": {
@@ -52,8 +53,7 @@
       "target": [
         "nsis",
         "portable"
-      ],
-      "icon": null
+      ]
     },
     "mac": {
       "target": ["dmg"],

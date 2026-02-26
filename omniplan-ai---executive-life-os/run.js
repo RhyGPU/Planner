@@ -1,42 +1,49 @@
 #!/usr/bin/env node
 
 /**
- * OmniPlan Development Server Launcher
- * Cross-platform script to start the Vite dev server
+ * OmniPlan AI — Desktop App Launcher
+ *
+ * Double-click this file (or run: node run.js) to build and launch the app.
+ * No terminal knowledge needed.
  */
 
-const { spawn } = require('child_process');
+const { execSync, spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
-console.log('\n🚀 Starting OmniPlan Development Server...');
-console.log('📍 Listening on http://localhost:5173\n');
-console.log('Press Ctrl+C to stop the server\n');
-
-// Determine OS and use appropriate npm command
 const isWindows = process.platform === 'win32';
-const command = isWindows ? 'npm.cmd' : 'npm';
+const npm = isWindows ? 'npm.cmd' : 'npm';
+const cwd = __dirname;
 
-const server = spawn(command, ['run', 'dev'], {
-  cwd: __dirname,
-  stdio: 'inherit',
-  shell: true
+function log(msg) {
+  console.log('[OmniPlan] ' + msg);
+}
+
+// Check if node_modules exists
+if (!fs.existsSync(path.join(cwd, 'node_modules'))) {
+  log('First run - installing dependencies (one-time)...');
+  execSync(npm + ' install', { cwd, stdio: 'inherit' });
+}
+
+// Check if dist/index.html exists — if not, build
+const distIndex = path.join(cwd, 'dist', 'index.html');
+if (!fs.existsSync(distIndex)) {
+  log('Building app...');
+  execSync(npm + ' run build', { cwd, stdio: 'inherit' });
+}
+
+// Launch Electron
+log('Starting OmniPlan AI...');
+const electron = require('electron');
+const electronPath = typeof electron === 'string' ? electron : (electron.default || electron);
+
+const child = spawn(electronPath, ['.'], {
+  cwd,
+  stdio: 'ignore',
+  detached: true,
 });
 
-server.on('close', (code) => {
-  console.log('\n✋ Development server stopped');
-  process.exit(code || 0);
-});
+child.unref();
+log('App launched. You can close this window.');
 
-server.on('error', (err) => {
-  console.error('❌ Failed to start server:', err);
-  process.exit(1);
-});
-
-// Handle signals gracefully
-process.on('SIGINT', () => {
-  server.kill();
-});
-
-process.on('SIGTERM', () => {
-  server.kill();
-});
+setTimeout(function() { process.exit(0); }, 500);
